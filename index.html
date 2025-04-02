@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cross-Platform Permission, Hardware & Speaker Check</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        margin: 30px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        margin: 10px;
+        cursor: pointer;
+      }
+      .status {
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🔥 Browser, OS, Permissions, Hardware & Speaker Check 🔥</h2>
+    <button onclick="checkEverything()">Check Now</button>
+    <button onclick="checkMuteStatus()">Check Speaker Mute</button>
+
+    <div id="result">
+      <p>OS: <span id="os" class="status">🔍 Detecting...</span></p>
+      <p>Browser: <span id="browser" class="status">🔍 Detecting...</span></p>
+      <p>
+        Camera Permission:
+        <span id="camera-permission" class="status">🔍 Not Checked</span>
+      </p>
+      <p>
+        Microphone Permission:
+        <span id="microphone-permission" class="status">🔍 Not Checked</span>
+      </p>
+      <p>
+        Camera Available:
+        <span id="camera-available" class="status">🔍 Not Checked</span>
+      </p>
+      <p>
+        Microphone Available:
+        <span id="microphone-available" class="status">🔍 Not Checked</span>
+      </p>
+      <p>
+        Speaker Available:
+        <span id="speaker-available" class="status">🔍 Not Checked</span>
+      </p>
+      <p>
+        Access Test: <span id="access-test" class="status">🔍 Not Tested</span>
+      </p>
+      <p>
+        Speaker Muted: <span id="status" class="status">🔍 Not Checked</span>
+      </p>
+    </div>
+
+    <script>
+      function detectOS() {
+        const platform = navigator.platform.toLowerCase();
+        if (platform.includes("win")) return "Windows";
+        if (platform.includes("mac")) return "macOS";
+        if (platform.includes("linux")) return "Linux";
+        if (/android/i.test(navigator.userAgent)) return "Android";
+        if (/iphone|ipad|ipod/i.test(navigator.userAgent)) return "iOS";
+        return "Unknown OS";
+      }
+
+      function detectBrowser() {
+        let userAgent = navigator.userAgent;
+        if (userAgent.includes("Chrome") && !userAgent.includes("Edg"))
+          return "Google Chrome";
+        if (userAgent.includes("Edg")) return "Microsoft Edge";
+        if (userAgent.includes("Firefox")) return "Mozilla Firefox";
+        if (userAgent.includes("Safari") && !userAgent.includes("Chrome"))
+          return "Safari";
+        return "Unknown Browser";
+      }
+
+      async function checkEverything() {
+        document.getElementById("os").innerText = detectOS();
+        document.getElementById("browser").innerText = detectBrowser();
+
+        const cameraPermEl = document.getElementById("camera-permission");
+        const micPermEl = document.getElementById("microphone-permission");
+        const cameraAvailableEl = document.getElementById("camera-available");
+        const micAvailableEl = document.getElementById("microphone-available");
+        const speakerAvailableEl = document.getElementById("speaker-available");
+        const accessTestEl = document.getElementById("access-test");
+
+        try {
+          if (navigator.permissions) {
+            try {
+              const camPerm = await navigator.permissions.query({
+                name: "camera",
+              });
+              const micPerm = await navigator.permissions.query({
+                name: "microphone",
+              });
+              cameraPermEl.innerHTML = formatPermission(camPerm.state);
+              micPermEl.innerHTML = formatPermission(micPerm.state);
+            } catch (error) {
+              cameraPermEl.innerText = "⚠️ Not Supported";
+              micPermEl.innerText = "⚠️ Not Supported";
+            }
+          }
+
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const hasCamera = devices.some(
+            (device) => device.kind === "videoinput"
+          );
+          const hasMicrophone = devices.some(
+            (device) => device.kind === "audioinput"
+          );
+          const hasSpeaker = devices.some(
+            (device) => device.kind === "audiooutput"
+          );
+
+          cameraAvailableEl.innerHTML = hasCamera
+            ? "✅ Available"
+            : "❌ Not Found";
+          micAvailableEl.innerHTML = hasMicrophone
+            ? "✅ Available"
+            : "❌ Not Found";
+          speakerAvailableEl.innerHTML = hasSpeaker
+            ? "✅ Available"
+            : "❌ Not Found";
+
+          if (hasCamera || hasMicrophone) {
+            try {
+              await navigator.mediaDevices.getUserMedia({
+                video: hasCamera,
+                audio: hasMicrophone,
+              });
+              accessTestEl.innerHTML = "✅ Access Granted!";
+            } catch (error) {
+              accessTestEl.innerHTML = "❌ Access Denied!";
+            }
+          } else {
+            accessTestEl.innerHTML = "⚠️ No Camera/Microphone Found";
+          }
+        } catch (error) {
+          console.error("Error checking permissions & hardware:", error);
+        }
+      }
+
+      function formatPermission(state) {
+        switch (state) {
+          case "granted":
+            return "✅ Granted";
+          case "prompt":
+            return "⚠️ Prompt Needed";
+          case "denied":
+            return "❌ Denied";
+          default:
+            return "❓ Unknown";
+        }
+      }
+
+      let audioContext;
+      let oscillator;
+      let gainNode;
+
+      function checkMuteStatus() {
+        if (!audioContext) {
+          audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+        }
+
+        if (audioContext.state === "suspended") {
+          document.getElementById("status").textContent =
+            "✅ Speaker is Muted!";
+          document.getElementById("status").style.color = "red";
+          return;
+        }
+
+        oscillator = audioContext.createOscillator();
+        gainNode = audioContext.createGain();
+
+        oscillator.frequency.value = 1;
+        gainNode.gain.value = 0.01;
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.start();
+
+        setTimeout(() => {
+          let testVolume = audioContext.destination.maxChannelCount;
+          if (testVolume === 0) {
+            document.getElementById("status").textContent =
+              "✅ Speaker is Muted!";
+            document.getElementById("status").style.color = "red";
+          } else {
+            document.getElementById("status").textContent =
+              "❌ Speaker is Active!";
+            document.getElementById("status").style.color = "green";
+          }
+          oscillator.stop();
+        }, 1000);
+      }
+    </script>
+  </body>
+</html>
